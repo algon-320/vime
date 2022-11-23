@@ -1,0 +1,6 @@
+[workspace]
+members = ["vime", "vime_config"]
+default-members = ["vime"]
+
+[patch.crates-io]
+winit = { path = "./winit" }

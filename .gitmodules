@@ -1,0 +1,9 @@
+[submodule "xcb-imdkit-rs"]
+	path = xcb-imdkit-rs
+	url = https://github.com/H-M-H/xcb-imdkit-rs
+[submodule "winit"]
+	path = winit
+	url = https://github.com/rust-windowing/winit
+[submodule "toyterm"]
+	path = toyterm
+	url = https://github.com/algon-320/toyterm.git

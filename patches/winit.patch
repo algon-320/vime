@@ -1,0 +1,101 @@
+diff --git a/src/platform_impl/linux/mod.rs b/src/platform_impl/linux/mod.rs
+index 953fca1d..e529ef87 100644
+--- a/src/platform_impl/linux/mod.rs
++++ b/src/platform_impl/linux/mod.rs
+@@ -149,6 +149,15 @@ impl WindowId {
+     }
+ }
+ 
++impl From<WindowId> for u64 {
++    fn from(wid: WindowId) -> Self {
++        match wid {
++            WindowId::X(wid) => wid.into(),
++            _ => unimplemented!(),
++        }
++    }
++}
++
+ #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+ pub enum DeviceId {
+     #[cfg(feature = "x11")]
+diff --git a/src/platform_impl/linux/x11/event_processor.rs b/src/platform_impl/linux/x11/event_processor.rs
+index 17f9436f..3f1158d8 100644
+--- a/src/platform_impl/linux/x11/event_processor.rs
++++ b/src/platform_impl/linux/x11/event_processor.rs
+@@ -939,6 +939,7 @@ impl<T: 'static> EventProcessor<T> {
+                         if !self.window_exists(xev.event) {
+                             return;
+                         }
++
+                         wt.ime
+                             .borrow_mut()
+                             .unfocus(xev.event)
+diff --git a/src/platform_impl/linux/x11/ime/context.rs b/src/platform_impl/linux/x11/ime/context.rs
+index 8d580820..559c6f32 100644
+--- a/src/platform_impl/linux/x11/ime/context.rs
++++ b/src/platform_impl/linux/x11/ime/context.rs
+@@ -56,10 +56,13 @@ impl ImeContext {
+             .check_errors()
+             .map_err(ImeContextCreationError::XError)?;
+ 
+-        Ok(ImeContext {
++        let ctx = ImeContext {
+             ic,
+             ic_spot: ic_spot.unwrap_or(ffi::XPoint { x: 0, y: 0 }),
+-        })
++        };
++        ctx.focus(xconn).map_err(ImeContextCreationError::XError)?;
++
++        Ok(ctx)
+     }
+ 
+     unsafe fn create_ic(
+diff --git a/src/platform_impl/linux/x11/mod.rs b/src/platform_impl/linux/x11/mod.rs
+index 27c92c46..db989d92 100644
+--- a/src/platform_impl/linux/x11/mod.rs
++++ b/src/platform_impl/linux/x11/mod.rs
+@@ -499,6 +499,12 @@ impl WindowId {
+     }
+ }
+ 
++impl From<WindowId> for u64 {
++    fn from(window_id: WindowId) -> Self {
++        window_id.0 as u64
++    }
++}
++
+ #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+ pub struct DeviceId(c_int);
+ 
+diff --git a/src/platform_impl/linux/x11/window.rs b/src/platform_impl/linux/x11/window.rs
+index 45759b05..44b1b49c 100644
+--- a/src/platform_impl/linux/x11/window.rs
++++ b/src/platform_impl/linux/x11/window.rs
+@@ -439,8 +439,8 @@ impl UnownedWindow {
+                     //| ffi::XI_KeyReleaseMask
+                     | ffi::XI_EnterMask
+                     | ffi::XI_LeaveMask
+-                    | ffi::XI_FocusInMask
+-                    | ffi::XI_FocusOutMask
++                    //| ffi::XI_FocusInMask
++                    //| ffi::XI_FocusOutMask
+                     | ffi::XI_TouchBeginMask
+                     | ffi::XI_TouchUpdateMask
+                     | ffi::XI_TouchEndMask;
+diff --git a/src/window.rs b/src/window.rs
+index 9410421d..a8198da7 100644
+--- a/src/window.rs
++++ b/src/window.rs
+@@ -83,6 +83,12 @@ impl WindowId {
+     }
+ }
+ 
++impl From<WindowId> for u64 {
++    fn from(window_id: WindowId) -> Self {
++        window_id.0.into()
++    }
++}
++
+ /// Object that allows you to build windows.
+ #[derive(Clone, Default)]
+ pub struct WindowBuilder {

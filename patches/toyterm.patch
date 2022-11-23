@@ -1,0 +1,191 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 7efb29c..949d787 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -24,6 +24,8 @@ lru = { version = "0.7.8", default-features = false }
+ chrono = { optional = true, version = "0.4.22", default-features = false, features = ["clock"] }
+ serde_json = { optional = true, version = "1.0.83" }
+ 
++vime_config = { path = "../vime_config" }
++
+ [features]
+ default = []
+ multiplex = ["chrono", "serde_json"]
+diff --git a/src/lib.rs b/src/lib.rs
+index cc7a1ff..0066336 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,5 +1,5 @@
+ mod cache;
+-mod config;
++//mod config;
+ mod control_function;
+ mod font;
+ mod pipe_channel;
+@@ -12,6 +12,8 @@ pub mod window;
+ #[cfg(feature = "multiplex")]
+ pub mod multiplexer;
+ 
++pub use glium;
++
+ lazy_static::lazy_static! {
+-    pub static ref TOYTERM_CONFIG: crate::config::Config = crate::config::build();
++    pub static ref TOYTERM_CONFIG: vime_config::Config = vime_config::CONFIG.clone();
+ }
+diff --git a/src/terminal.rs b/src/terminal.rs
+index 47da3dc..0fc62d1 100644
+--- a/src/terminal.rs
++++ b/src/terminal.rs
+@@ -1737,6 +1737,10 @@ fn exec_shell() -> Result<()> {
+     let sigdfl = SigAction::new(SigHandler::SigDfl, SaFlags::empty(), SigSet::empty());
+     unsafe { sigaction(Signal::SIGPIPE, &sigdfl).expect("sigaction") };
+ 
++    // Set the umask to prevent other people from seeing the temporary content.
++    use nix::sys::stat::{umask, Mode};
++    umask(Mode::S_IRWXG | Mode::S_IRWXO);
++
+     let args: Vec<CString> = crate::TOYTERM_CONFIG
+         .shell
+         .iter()
+diff --git a/src/view.rs b/src/view.rs
+index 8242203..a2e6e08 100644
+--- a/src/view.rs
++++ b/src/view.rs
+@@ -309,10 +309,7 @@ impl TerminalView {
+                     let is_inversed = cell.attr.inversed;
+ 
+                     let on_cursor = if let Some(cursor) = self.cursor {
+-                        self.view_focused
+-                            && cursor.style == CursorStyle::Block
+-                            && i == cursor.row
+-                            && j == cursor.col
++                        cursor.style == CursorStyle::Block && i == cursor.row && j == cursor.col
+                     } else {
+                         false
+                     };
+@@ -430,9 +427,7 @@ impl TerminalView {
+         }
+ 
+         if let Some(cursor) = self.cursor {
+-            if self.view_focused
+-                && matches!(cursor.style, CursorStyle::Underline | CursorStyle::Bar)
+-            {
++            if matches!(cursor.style, CursorStyle::Underline | CursorStyle::Bar) {
+                 let rect = if cursor.style == CursorStyle::Underline {
+                     PixelRect {
+                         x: cursor.col as i32 * cell_size.w as i32,
+diff --git a/src/window.rs b/src/window.rs
+index d25673a..42c2338 100644
+--- a/src/window.rs
++++ b/src/window.rs
+@@ -1,13 +1,15 @@
+ use glium::{glutin, Display};
+ use glutin::{
+-    dpi::PhysicalPosition,
++    dpi::{PhysicalPosition, PhysicalSize},
+     event::{ElementState, ModifiersState, MouseButton, VirtualKeyCode, WindowEvent},
+     event_loop::ControlFlow,
+ };
+ 
+-use crate::terminal::{Mode, Terminal, TerminalSize};
++use crate::terminal::{Mode, Terminal};
+ use crate::view::{TerminalView, Viewport};
+ 
++pub use crate::terminal::TerminalSize;
++
+ type Event = glutin::event::Event<'static, ()>;
+ type CursorPosition = PhysicalPosition<f64>;
+ 
+@@ -131,6 +133,19 @@ impl TerminalWindow {
+         self.terminal.send_sigterm();
+     }
+ 
++    pub fn show(&self) {
++        self.display.gl_window().window().set_visible(true);
++    }
++    pub fn hide(&mut self) {
++        self.display.gl_window().window().set_visible(false);
++        self.modifiers = ModifiersState::empty();
++    }
++
++    pub fn window_id(&self) -> u32 {
++        let id: u64 = self.display.gl_window().window().id().into();
++        id as u32
++    }
++
+     // Change cursor icon according to the current mouse_track mode
+     pub fn refresh_cursor_icon(&mut self) {
+         let icon = if self.mode.mouse_track {
+@@ -332,6 +347,27 @@ impl TerminalWindow {
+         self.view.viewport()
+     }
+ 
++    pub fn resize_with_terminal_size(&mut self, size: TerminalSize) {
++        let cell_sz = self.view.cell_size();
++
++        let viewport = Viewport {
++            x: 0,
++            y: 0,
++            w: cell_sz.w * size.cols as u32,
++            h: cell_sz.h * size.rows as u32,
++        };
++
++        self.display
++            .gl_window()
++            .window()
++            .set_inner_size(PhysicalSize {
++                width: viewport.w,
++                height: viewport.h,
++            });
++
++        self.set_viewport(viewport);
++    }
++
+     pub fn set_viewport(&mut self, new_viewport: Viewport) {
+         log::debug!("viewport changed: {:?}", new_viewport);
+         self.view.set_viewport(new_viewport);
+@@ -421,8 +457,42 @@ impl TerminalWindow {
+                 WindowEvent::KeyboardInput { input, .. }
+                     if input.state == ElementState::Pressed =>
+                 {
+-                    if let Some(key) = input.virtual_keycode {
+-                        self.on_key_press(key);
++                    match input.virtual_keycode {
++                        Some(VirtualKeyCode::LShift | VirtualKeyCode::RShift) => {
++                            self.modifiers.insert(ModifiersState::SHIFT);
++                        }
++                        Some(VirtualKeyCode::LControl | VirtualKeyCode::RControl) => {
++                            self.modifiers.insert(ModifiersState::CTRL);
++                        }
++                        Some(VirtualKeyCode::LAlt | VirtualKeyCode::RAlt) => {
++                            self.modifiers.insert(ModifiersState::ALT);
++                        }
++                        Some(VirtualKeyCode::LWin | VirtualKeyCode::RWin) => {
++                            self.modifiers.insert(ModifiersState::LOGO);
++                        }
++
++                        Some(key) => self.on_key_press(key),
++
++                        None => {}
++                    }
++                }
++                WindowEvent::KeyboardInput { input, .. }
++                    if input.state == ElementState::Released =>
++                {
++                    match input.virtual_keycode {
++                        Some(VirtualKeyCode::LShift | VirtualKeyCode::RShift) => {
++                            self.modifiers.remove(ModifiersState::SHIFT);
++                        }
++                        Some(VirtualKeyCode::LControl | VirtualKeyCode::RControl) => {
++                            self.modifiers.remove(ModifiersState::CTRL);
++                        }
++                        Some(VirtualKeyCode::LAlt | VirtualKeyCode::RAlt) => {
++                            self.modifiers.remove(ModifiersState::ALT);
++                        }
++                        Some(VirtualKeyCode::LWin | VirtualKeyCode::RWin) => {
++                            self.modifiers.remove(ModifiersState::LOGO);
++                        }
++                        _ => {}
+                     }
+                 }
+ 

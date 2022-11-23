@@ -1,0 +1,48 @@
+default_columns = 40
+default_rows = 6
+
+trigger_key_state = 0x8  # Alt
+trigger_key_keycode = 62 # RightShift
+
+font_size = 25
+scroll_bar_width = 0
+
+# Width of EAW ambiguous character
+east_asian_width_ambiguous = 1  # halfwidth
+# east_asian_width_ambiguous = 2  # fullwidth
+
+# Paths to font files which FreeType supports (TTF, OTF, etc.)
+# If multiple fonts are specified, toyterm tries to find a glyph in the given order.
+#
+# fonts_regular = [
+#     "/path/to/your/favorite/regular_font.ttf",
+#     "/path/to/your/favorite/regular_font_fallback.ttf",
+# ]
+# fonts_bold = [
+#     "/path/to/your/favorite/bold_font.ttf",
+#     "/path/to/your/favorite/bold_font_fallback.ttf",
+# ]
+# fonts_faint = [
+#     "/path/to/your/favorite/thin_font.ttf",
+#     "/path/to/your/favorite/thin_font_fallback.ttf",
+# ]
+
+# Colors in RRGGBBAA format
+# (Note that colors with AA = 00 are reserved for internal usage.)
+#
+# color_black          = 0x000000FF
+# color_red            = 0xFF0000FF
+# color_green          = 0x00FF00FF
+# color_yellow         = 0xFFFF00FF
+# color_blue           = 0x0000FFFF
+# color_magenta        = 0xFF00FFFF
+# color_cyan           = 0x00FFFFFF
+# color_white          = 0xFFFFFFFF
+# color_bright_black   = 0x505050FF
+# color_bright_red     = 0xFF5050FF
+# color_bright_green   = 0x50FF50FF
+# color_bright_yellow  = 0xFFFF50FF
+# color_bright_blue    = 0x5050FFFF
+# color_bright_magenta = 0xFF50FFFF
+# color_bright_cyan    = 0x50FFFFFF
+# color_bright_white   = 0xFFFFFFFF

@@ -1,0 +1,9 @@
+[package]
+name = "vime_config"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+config = { version = "0.13.1", default-features = false, features = ["toml"] }
+lazy_static = "1.4.0"
+serde = { version = "1", features = ["derive"] }
